@@ -6,5 +6,6 @@
       "/home/michael/TreeMortality/data/huc180102111102/10TDL0480045075_2020_labels.gpkg": "/home/michael/TreeMortality/data/huc180102111102/NAIP/2020/2020.vrt",
       "/home/michael/TreeMortality/data/huc180102111102/10TDL0480045075_2022_labels.gpkg": "/home/michael/TreeMortality/data/huc180102111102/NAIP/2022/2022.vrt",
       "/home/michael/TreeMortality/data/huc180102111102/10TDL0480045075_2018_labels.gpkg": "/home/michael/TreeMortality/data/huc180102111102/NAIP/2018/2018.vrt",
-      "/home/michael/TreeMortality/data/huc180102110602/10TEK0500244992_2022_labels.gpkg": "/home/michael/TreeMortality/data/huc180102110602/NAIP/2022/2022.vrt"
+      "/home/michael/TreeMortality/data/huc180102110602/10TEK0500244992_2022_labels.gpkg": "/home/michael/TreeMortality/data/huc180102110602/NAIP/2022/2022.vrt",
+      "/home/michael/TreeMortality/data/huc180102110901and2and3/10TDL0488245360_2022_labels.gpkg": "/home/michael/TreeMortality/data/huc180102110901and2and3/NAIP/2022/2022.vrt"
 }
