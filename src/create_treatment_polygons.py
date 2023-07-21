@@ -1,3 +1,6 @@
+#[markdonw] 
+# Run as interactive python
+
 #%%
 from pathlib import Path
 import os
@@ -12,31 +15,36 @@ import numpy as np
 import json
 from dea_tools.spatial import xr_vectorize
 
-# %%
+# %%[markdown]
+#Change paths below if need be, then run the rest.
+
+#%%
 # args
 crs = 'EPSG:26910'
+helena_path = Path('/home/michael/TreeMortality/data/helena')
 
-#helena_cc_path ='/media/storage/RAVG/helena/ca4077112312420170831_20151022_20171027_rdnbr_cc.tif'
-helena_cc_path = '../data/tmp/ca4077112312420170831_20151022_20171027_rdnbr_cc.tif'
+helena_cc_path = '/media/storage/RAVG/helena/ca4077112312420170831_20151022_20171027_rdnbr_cc.tif'
 helena = rioxarray.open_rasterio(helena_cc_path).rio.reproject(crs)
 
-#monument_cc_path = '/media/storage/RAVG/TrinityCounty/2021/ca4075212333720210731/ca4075212333720210731_20201014_20211009_rdnbr_cc.tif'
-monument_cc_path = '../data/tmp/ca4075212333720210731_20201014_20211009_rdnbr_cc.tif'
+monument_cc_path = '/media/storage/RAVG/TrinityCounty/2021/ca4075212333720210731/ca4075212333720210731_20201014_20211009_rdnbr_cc.tif'
 monument = rioxarray.open_rasterio(monument_cc_path).rio.reproject(crs)
 
-#aoi_path = '/home/michael/TreeMortality/data/helena/helena.gpkg'
-aoi_path = '../data/tmp/aoi.gpkg'
+aoi_path = helena_path / 'helena.gpkg'
 
-out_dir = Path('/home/michael/tmp/treatment_polys')
+out_dir = helena_path / 'treatment_polys'
 os.makedirs(out_dir, exist_ok=True)
 log_path = out_dir / 'treatment_desc.csv'
+treatment_tiff = out_dir / 'treatment_codes.tiff'
+
+#%%[markdown]
+# If the above paths are coreectthe rest can be run all together.
 
 #%%
 # get bounds from aoi
 aoi = gpd.read_file(aoi_path)
 minx, miny, maxx, maxy = aoi.total_bounds
 
-# clip rasters to bounds
+# clip helena raster to bounds
 helena_raster = helena.rio.clip_box(
     minx=minx,
     miny=miny,
@@ -44,12 +52,12 @@ helena_raster = helena.rio.clip_box(
     maxy=maxy,
 )
 
-# change no data values to nans
+# change no data values to 0
 helena_raster = helena_raster.where(
     helena_raster[0] != helena_raster.attrs['_FillValue'],
     ).fillna(0)
-helena_raster.rio.to_raster('/home/michael/tmp/HEL.tif')
 
+# clip monument raster to bounds and reproj match to helena
 monument_raster = monument.rio.clip_box(
     minx=minx,
     miny=miny,
@@ -59,15 +67,14 @@ monument_raster = monument.rio.clip_box(
     helena_raster
 )
 
+# change no data values to 0
 monument_raster = monument_raster.where(
     monument_raster[0] != monument_raster.attrs['_FillValue'],
     ).fillna(0)
 
-monument_raster.rio.to_raster('/home/michael/tmp/MON.tif')
-#%%
 
 def severity(fire):
-    '''returns fire severity from fraction'''
+    '''returns fire severity from pix value'''
     if fire == 0:
         return 'unburned'
     if fire <= 1/3:
@@ -76,10 +83,14 @@ def severity(fire):
         return 'medium'
     if 2/3 < fire:
         return 'high'
-    
+
+
 @np.vectorize
 def encode(hel, mon):
     '''
+    Returns treatment code for a pixel based on the severity
+    of the Helana and Monument fire at that pixel.
+        
     Code |  Helena  | Monument
     0    | unburned | unburned
     1    | unburned | low
@@ -129,8 +140,6 @@ def encode(hel, mon):
     return codes[severity(hel)][severity(mon)]
     
 
-
-
 # make dataset
 treatments = xr.Dataset(
     {
@@ -138,12 +147,11 @@ treatments = xr.Dataset(
         'helena': helena_raster[0]
     }
 )
-#%%
 
 # add code raster full of zeros
 code = encode(helena_raster[0], monument_raster[0])
 
-#
+# add it to treatments dataset
 treatments['code'] = (('y', 'x'), code.astype(np.int8))
 treatments = treatments.rio.clip_box(
     minx=minx,
@@ -151,34 +159,52 @@ treatments = treatments.rio.clip_box(
     maxx=maxx,
     maxy=maxy,
 )
-treatments.code.rio.to_raster('/home/michael/tmp/CODES.tif')
 
-# plygonize
+# save a tiff of treatments
+treatments.code.rio.to_raster(treatment_tiff)
+
+# polygonize the tiff
 df = xr_vectorize(da=treatments.code, crs=crs)
 df['attribute'] = df.attribute.astype(int)
 df['area_'] = df.area
-# %%
+
+
 def make_study_polys(codes, n, out_dir, log_path=None):
+    '''
+    Writes GeoPackages the n largest burn severity polygons, only including
+    polygons greater than 1 ha, by code to out_dir.  
+    If log_path is specified will write a logfile with some summary
+    statistics of polygons for each code. 
+    '''
     log_dfs = []
     total_area = df.area.sum()
     for code in codes:
+        # get n largest polygons for code
         sub = df[
             df.attribute == code
             ].nlargest(n, 'area_')
         
-        fname = out_dir / f'code{code}_n{n}.gpkg'
-
-        sub.to_file(fname)
+        # drop polygons > 1 ha
+        sub = sub[sub.area > 10_000]
         
+        if len(sub) > 0:
+            # make filename
+            fname = out_dir / f'code{code}_n{n}.gpkg'
+
+            # write gpkg of polygons
+            sub.to_file(fname)
+        
+        # record info for log file, if need be
         if log_path is not None:
             desc = sub.describe().area_.to_frame().T
             desc['%A'] = 100 * df[df.attribute == code].area.sum() / total_area
             log_dfs.append(desc)
 
+    # write log, if need be
     if log_path is not None:
         log_df = pd.concat(log_dfs)
         log_df.to_csv(log_path)
-# %%
+        
 
 codes = range(16)
 n = 5
