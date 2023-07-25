@@ -1,4 +1,4 @@
-#[markdonw] 
+#[markdown] 
 # Run as interactive python
 
 #%%
