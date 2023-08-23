@@ -121,8 +121,9 @@ def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
     print(f'\t\t--NDVI and SAVI (step 4/7)...')
     nir_agg = xa.band_data[3].astype(float)
     red_agg = xa.band_data[2].astype(float)
-    ndvi_agg = ndvi(nir_agg, red_agg)
-    savi_agg = savi(nir_agg, red_agg)
+    ndvi_agg = (nir_agg - red_agg) / (nir_agg + red_agg)
+    L = 1.0
+    savi_agg = (1 + L) * (nir_agg - red_agg) / (nir_agg + red_agg + L)
     xa['NDVI'] = ndvi_agg.astype(np.float16)
     xa['SAVI'] = savi_agg.astype(np.float16)
     
@@ -280,7 +281,7 @@ if __name__ == '__main__':
     xmin, ymin, xmax, ymax = crowns.total_bounds
 
     # clip the image
-    xa = rioxarray.open_rasterio(args.tif_path).astype(np.float16).rio.clip_box(
+    xa = rioxarray.open_rasterio(args.tif_path).astype(np.float32).rio.clip_box(
         minx=xmin,
         miny=ymin,
         maxx=xmax,
