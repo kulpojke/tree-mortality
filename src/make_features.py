@@ -1,47 +1,22 @@
-import json
-import os
-import pickle
-from pathlib import Path
-from joblib import Parallel, delayed
-from statistics import mode
-
-import geopandas as gpd
-import shapely
-import matplotlib.pyplot as plt
-import numpy as np
-import optuna
-import pandas as pd
-import rioxarray
-
-from xrspatial import hillshade
-from xrspatial import convolution
-from datashader.colors import Set1
-from datashader.transfer_functions import shade
-from datashader.transfer_functions import stack
-from datashader.transfer_functions import dynspread
-from datashader.transfer_functions import set_background
-from datashader.colors import Elevation
-
-from xrspatial import focal, slope
-import seaborn as sns
-from tqdm import tqdm
-from joblib_progress import joblib_progress
-from xrspatial.multispectral import ndvi, savi
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay)
-from sklearn.model_selection import train_test_split, cross_val_score
-
-from sklearn.model_selection import RandomizedSearchCV as RSCV
-from sklearn.svm import SVC
-from sklearn.metrics import roc_auc_score, accuracy_score, log_loss
-import argparse
-
 # python3 src/make_features.py \
 #   --tif_path=$tif_path=${tif_path}${year}/$[year}.vrt \
 #   --crown_path=$crown_path \
 #   --save_path=$save_path \
 #   --year=$year \
 #   --IDcolum=IDcolumn
+
+
+from pathlib import Path
+import math
+#from joblib import Parallel, delayed
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import rioxarray
+from tqdm import tqdm
+from xrspatial.multispectral import ndvi, savi
+import argparse
 
 
 def parse_arguments():
@@ -144,8 +119,8 @@ def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
 
     # calculate NDVI and SAVI
     print(f'\t\t--NDVI and SAVI (step 4/7)...')
-    nir_agg = xa.band_data[3].astype(np.float32)
-    red_agg = xa.band_data[2].astype(np.float32)
+    nir_agg = xa.band_data[3].astype(float)
+    red_agg = xa.band_data[2].astype(float)
     ndvi_agg = ndvi(nir_agg, red_agg)
     savi_agg = savi(nir_agg, red_agg)
     xa['NDVI'] = ndvi_agg.astype(np.float16)
@@ -233,6 +208,17 @@ def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
 
                 savi_mean = xa.SAVI.mean(skipna=True).values * 1
                 savi_std = xa.SAVI.std(skipna=True).values * 1
+
+                # ensure no infs
+                if math. isinf(ndvi_mean):
+                    raise('ndvi_mean is inf')
+                if math. isinf(ndvi_std):
+                    raise('ndvi_std is inf')
+                if math. isinf(savi_mean):
+                    raise('ndvi_mean is inf')
+                if math. isinf(savi_std):
+                    raise('ndvi_std is inf')
+
 
                 r_mean = r.mean()
                 r_std = r.std()
