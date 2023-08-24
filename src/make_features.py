@@ -124,8 +124,8 @@ def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
     ndvi_agg = (nir_agg - red_agg) / (nir_agg + red_agg)
     L = 1.0
     savi_agg = (1 + L) * (nir_agg - red_agg) / (nir_agg + red_agg + L)
-    xa['NDVI'] = ndvi_agg.astype(np.float16)
-    xa['SAVI'] = savi_agg.astype(np.float16)
+    xa['NDVI'] = ndvi_agg
+    xa['SAVI'] = savi_agg
     
     del nir_agg, red_agg, ndvi_agg, savi_agg
 
@@ -212,13 +212,13 @@ def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
 
                 # ensure no infs
                 if math. isinf(ndvi_mean):
-                    raise('ndvi_mean is inf')
+                    raise Exception('ndvi_mean is inf')
                 if math. isinf(ndvi_std):
-                    raise('ndvi_std is inf')
+                    raise Exception('ndvi_std is inf')
                 if math. isinf(savi_mean):
-                    raise('ndvi_mean is inf')
+                    raise Exception('ndvi_mean is inf')
                 if math. isinf(savi_std):
-                    raise('ndvi_std is inf')
+                    raise Exception('ndvi_std is inf')
 
 
                 r_mean = r.mean()
