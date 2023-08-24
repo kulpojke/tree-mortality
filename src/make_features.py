@@ -67,6 +67,14 @@ def parse_arguments():
         required=False,
         help='Optional - name of column containing labels for classified crowns.'
     )
+    
+    parser.add_argument(
+        '--cols',
+        type=str,
+        required=False,
+        help='''Optional - column names to read, defaults to ['UniqueID', 'treatment', 'geometry']'''
+        default=['UniqueID', 'treatment', 'geometry']
+    )
 
     # parse the args
     args = parser.parse_args()
@@ -275,7 +283,7 @@ if __name__ == '__main__':
     args = parse_arguments()
     
     # read crowns
-    crowns = gpd.read_parquet(args.crown_path)
+    crowns = gpd.read_parquet(args.crown_path)[args.cols]
     
     # get the extent of the crowns
     xmin, ymin, xmax, ymax = crowns.total_bounds
