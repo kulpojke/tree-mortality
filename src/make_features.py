@@ -72,7 +72,7 @@ def parse_arguments():
         '--cols',
         type=str,
         required=False,
-        help='''Optional - column names to read, defaults to ['UniqueID', 'treatment', 'geometry']'''
+        help='''Optional - column names to read, defaults to ['UniqueID', 'treatment', 'geometry']''',
         default=['UniqueID', 'treatment', 'geometry']
     )
 
