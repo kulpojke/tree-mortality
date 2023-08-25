@@ -39,15 +39,23 @@ def parse_arguments():
         help='Path to output directory.'
     )
     
+    parser.add_argument(
+        '--resolution',
+        type=float,
+        required=False,
+        default=3.0,
+        help='Resolution of output tif. Default=3.0, to match Planetscope.'
+    )
+    
     # parse the args
     args = parser.parse_args()
 
     return(args)
 
 
-def intense_pipe(tile, out_dir):
+def intense_pipe(tile, out_dir, resolution):
     '''
-    writes 1m tif from mean intensity of first returns.
+    writes 1 m tif from mean intensity of first returns.
     '''
     
     # define stages
@@ -58,7 +66,7 @@ def intense_pipe(tile, out_dir):
         dimension='Intensity',
         data_type='uint16_t',
         output_type='mean',
-        resolution='1'
+        resolution=str(resolution)
         )
     
     # create pipeline from stages
@@ -73,5 +81,5 @@ def intense_pipe(tile, out_dir):
 
 if __name__ == '__main__':
     args = parse_arguments()
-    intense_pipe(args.tile, args.out_dir)
+    intense_pipe(args.tile, args.out_dir, args.resolution)
     
