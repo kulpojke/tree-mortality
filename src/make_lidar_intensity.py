@@ -4,8 +4,14 @@
 # conda install -c conda-forge python-pdal
 # Usage:
 # python make_lidar_intensity.py \
-#   --tile=10TEL0509245547 \
+#   --tile=10TEL0509245547.laz \
 #   --out_dir=/path/to/out_dir
+#
+# Or:
+# cat tiles.list | parallel --progress \
+#   python make_lidar_intensity.py \
+#       --tile={} \
+#       --out_dir=/path/to/out_dir
 
 from pathlib import Path
 import argparse
@@ -46,9 +52,9 @@ def intense_pipe(tile, out_dir):
     
     # define stages
     reader = pdal.Reader.las(tile)
-    filter = pdal.Filter.returns(group='first')
+    filter = pdal.Filter.range(limits='ReturnNumber[1:1]')
     writer = pdal.Writer.gdal(
-        filename= str(Path(out_dir) / Path(tile).stem + '.tif'),
+        filename= str(Path(out_dir) / f'{Path(tile).stem}.tif'),
         dimension='Intensity',
         data_type='uint16_t',
         output_type='mean',
@@ -57,6 +63,7 @@ def intense_pipe(tile, out_dir):
     
     # create pipeline from stages
     pipeline = pdal.Pipeline()
+    pipeline |= reader
     pipeline |= filter
     pipeline |= writer
 
