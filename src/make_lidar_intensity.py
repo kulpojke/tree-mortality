@@ -5,13 +5,13 @@
 # Usage:
 # python make_lidar_intensity.py \
 #   --tile=10TEL0509245547.laz \
-#   --out_dir=/path/to/out_dir
+#   --intensity_dir=/path/to/intensity_dir
 #
 # Or:
 # cat tiles.list | parallel --progress \
 #   python make_lidar_intensity.py \
 #       --tile={} \
-#       --out_dir=/path/to/out_dir
+#       --intensity_dir=/path/to/intensity_dir
 
 from pathlib import Path
 import argparse
@@ -33,7 +33,14 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        '--out_dir',
+        '--intensity_dir',
+        type=str,
+        required=True,
+        help='Path to output directory.'
+    )
+    
+    parser.add_argument(
+        '--dsm_dir',
         type=str,
         required=True,
         help='Path to output directory.'
@@ -53,27 +60,37 @@ def parse_arguments():
     return(args)
 
 
-def intense_pipe(tile, out_dir, resolution):
+def intense_pipe(tile, intensity_dir, dsm_dir, resolution):
     '''
     writes 1 m tif from mean intensity of first returns.
     '''
     
     # define stages
     reader = pdal.Reader.las(tile)
-    filter = pdal.Filter.range(limits='ReturnNumber[1:1]')
-    writer = pdal.Writer.gdal(
-        filename= str(Path(out_dir) / f'{Path(tile).stem}.tif'),
+    filter = pdal.Filter.range(limits='ReturnNumber[1:1],Classification![7:7]')
+    intensity = pdal.Writer.gdal(
+        filename= str(Path(intensity_dir) / f'{Path(tile).stem}.tif'),
         dimension='Intensity',
         data_type='uint16_t',
         output_type='mean',
         resolution=str(resolution)
         )
-    
+    outlier = filter.outlier()
+    dsm = pdal.Writer.gdal(
+        filename= str(Path(dsm_dir) / f'{Path(tile).stem}.tif'),
+        dimension='Z',
+        data_type='uint16_t',
+        output_type='max',
+        resolution=str(resolution)
+        )
+        
     # create pipeline from stages
     pipeline = pdal.Pipeline()
     pipeline |= reader
     pipeline |= filter
-    pipeline |= writer
+    pipeline |= intensity
+    pipeline |= outlier
+    pipeline |= dsm
 
     # execute pipeline
     pipeline.execute()
@@ -81,5 +98,5 @@ def intense_pipe(tile, out_dir, resolution):
 
 if __name__ == '__main__':
     args = parse_arguments()
-    intense_pipe(args.tile, args.out_dir, args.resolution)
+    intense_pipe(args.tile, args.intensity_dir, args.dsm_dir, args.resolution)
     
