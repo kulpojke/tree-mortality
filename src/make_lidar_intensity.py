@@ -67,7 +67,8 @@ def intense_pipe(tile, intensity_dir, dsm_dir, resolution):
     
     # define stages
     reader = pdal.Reader.las(tile)
-    filter = pdal.Filter.range(limits='ReturnNumber[1:1],Classification![7:7]')
+    filter = pdal.Filter.range(
+        limits='ReturnNumber[1:1],Classification![7:7],Classification![18:18]')
     intensity = pdal.Writer.gdal(
         filename= str(Path(intensity_dir) / f'{Path(tile).stem}.tif'),
         dimension='Intensity',
@@ -75,7 +76,11 @@ def intense_pipe(tile, intensity_dir, dsm_dir, resolution):
         output_type='mean',
         resolution=str(resolution)
         )
-    outlier = filter.outlier()
+    outlier = filter.outlier(
+        method='radius',
+        radius='1.0',
+        min_k='4'
+    )
     dsm = pdal.Writer.gdal(
         filename= str(Path(dsm_dir) / f'{Path(tile).stem}.tif'),
         dimension='Z',
