@@ -3,18 +3,15 @@
 # requires pdal-python
 # conda install -c conda-forge python-pdal
 # Usage:
-# python make_lidar_intensity.py \
-#   --tile=10TEL0509245547.laz \
-#   --intensity_dir=/path/to/intensity_dir
-#
-# Or:
+#    
 # cat tmp/tiles.list | parallel --progress \
-    # python src/make_lidar_intensity.py \
-    # --tile={} \
-    # --intensity_dir=intensity \
-    # --ground_dir=ground_map \
-    # --hag_threshold=100
-
+#   python src/make_lidar_intensity.py  \
+#   --tile={} \
+#   --intensity_dir=intensity \
+#   --dem_dir=DEM  \
+#   --chm_dir=CHM \
+#   --crs='EPSG:32610' \
+#   --hag_limit=71
 
 from pathlib import Path
 import argparse
@@ -57,13 +54,6 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        '--groundiness_dir',
-        type=str,
-        required=True,
-        help='Path to groundiness map output directory.'
-    )
-    
-    parser.add_argument(
         '--resolution',
         type=float,
         required=False,
@@ -72,12 +62,22 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        '--hag_threshold',
+        '--hag_limit',
         type=float,
         required=False,
         default=120,
         help='HaightAboveGround threshold above which points will be considered noise.'
     )
+    
+    parser.add_argument(
+        '--crs',
+        type=str,
+        required=False,
+        default=None,
+        help='Coordinate reference system for output if reprojection is desired.'
+    )
+    
+    
     
     # parse the args
     args = parser.parse_args()
@@ -90,8 +90,9 @@ def intense_pipe(
     intensity_dir,
     chm_dir,
     dem_dir,
-    groundiness_dir,
-    resolution
+    resolution,
+    hag_limit,
+    crs=None
     ):
     '''
     writes 1 m tif from mean intensity of first returns.
@@ -105,22 +106,27 @@ def intense_pipe(
         limits='Classification![7:7],Classification![18:18]',
     )
     
+    reproject = pdal.Filter.reprojection(
+        out_srs=crs
+    )
+    
     hag = pdal.Filter.hag_nn(count=2)
     
-    chm = pdal.Writer.gdal(
+    chm_writer = pdal.Writer.gdal(
         filename= str(Path(chm_dir) / f'{Path(tile).stem}.tif'),
         data_type='float',
         dimension='HeightAboveGround',
+        where=f'HeightAboveGround < {hag_limit}',
         output_type='max',
         resolution=str(resolution)
         )
     
-    intensity = pdal.Writer.gdal(
+    intensity_writer = pdal.Writer.gdal(
         filename= str(Path(intensity_dir) / f'{Path(tile).stem}.tif'),
         dimension='Intensity',
         data_type='uint16_t',
         output_type='mean',
-        where='ReturnNumber == 1',
+        where=f'(ReturnNumber == 1) && (HeightAboveGround < {hag_limit})',
         resolution=str(resolution)
         )
     
@@ -131,27 +137,16 @@ def intense_pipe(
         where='Classification == 2',
         resolution=str(resolution)
         )
-    
-    
-    
-    
-    
-    ground = pdal.Filter.range(limits='Classification[2:2]')
-    
-    ground_writer = pdal.Writer.gdal(
-        filename= str(Path(groundiness_dir) / f'{Path(tile).stem}.tif'),
-        data_type='uint16_t',
-        output_type='count',
-        resolution=str(resolution)
-        )
         
     # create pipeline from stages
     pipeline = pdal.Pipeline()
     pipeline |= reader
     pipeline |= noise_filter
+    if crs is not None:
+        pipeline |= reproject
     pipeline |= hag
-    pipeline |= chm
-    pipeline |= intensity
+    pipeline |= chm_writer
+    pipeline |= intensity_writer
     pipeline |= dem_writer
     
     # execute pipeline
@@ -166,6 +161,7 @@ if __name__ == '__main__':
         args.intensity_dir,
         args.chm_dir,
         args.dem_dir,
-        args.groundiness_dir,
-        args.resolution
+        args.resolution,
+        args.hag_limit,
+        crs=args.crs
     )
