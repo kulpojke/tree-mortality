@@ -1,5 +1,5 @@
 # python3 src/make_features.py \
-#   --tif_path=${tif_path}${year}/$[year}.vrt \
+#   --tif_path=${tif_path}${year}/${year}.vrt \
 #   --crown_path=$crown_path \
 #   --save_path=$save_path \
 #   --year=$year \
@@ -87,7 +87,7 @@ def parse_arguments():
     return(args)
 
 
-def make_model_inputs(crowns, xa, save_path, y, IDcolumn, label=None,):
+def make_model_inputs(crowns, xa, save_path, y, i, IDcolumn, label=None,):
     '''
     Returns DataFrame with features for use in classification model.
     The resulting DataFrame has 'ID' column which matches that in crowns.
@@ -273,7 +273,7 @@ def make_model_inputs(crowns, xa, save_path, y, IDcolumn, label=None,):
             'r_mean', 'r_std', 'g_mean', 'g_std', 'b_mean', 'b_std', 'n_mean', 'n_std']
 
     data = pd.DataFrame(data, columns=cols)
-    dst = save_path / f'features_{y}.parquet'
+    dst = save_path / f'features_{y}_{i}.parquet'
     data.to_parquet(dst)
     print(y, 'saved to ', str(dst))
     del data
@@ -283,11 +283,8 @@ if __name__ == '__main__':
     # parse args
     args = parse_arguments()
     
-    # read crowns
-    crowns = gpd.read_parquet(args.crown_path)[args.cols]
-    
     # get the extent of the crowns
-    xmin, ymin, xmax, ymax = crowns.total_bounds
+    xmin, ymin, xmax, ymax = gpd.read_parquet(args.crown_path)[args.cols].total_bounds
 
     # clip the image
     xa = rioxarray.open_rasterio(args.tif_path).astype(np.float32).rio.clip_box(
@@ -296,15 +293,30 @@ if __name__ == '__main__':
         maxx=xmax,
         maxy=ymax
     ).to_dataset(name='band_data')
+    
+    # process in chunks ()
+    n = len(gpd.read_parquet(args.crown_path)[args.cols])
+    chunks = list(np.arange(10_000, n, 10_000))
+    if chunks[-1] != n:
+        chunks = chunks + [n]
 
-    # for file labeling
-    gk = args.crown_path.stem
-
-    # make inputs
-    make_model_inputs(
-        crowns,
-        xa,
-        args.save_path, args.year,
-        args.IDcolumn,
-        label=args.label
-        )
+    for i, j in enumerate(np.arange(0, n, 10_000)):
+        if j == 0:
+            previous = j
+            continue
+        
+        print(f'--- on {i} of {len(chunks)} ---')
+        # read crowns
+        crowns = gpd.read_parquet(args.crown_path).iloc[previous:j, :][args.cols]
+    
+        # make inputs
+        make_model_inputs(
+            crowns,
+            xa,
+            args.save_path,
+            args.year,
+            i,
+            args.IDcolumn,
+            label=args.label
+            )
+# %%
