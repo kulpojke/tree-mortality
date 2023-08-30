@@ -1,5 +1,5 @@
 # python3 src/make_features.py \
-#   --tif_path=$tif_path=${tif_path}${year}/$[year}.vrt \
+#   --tif_path=${tif_path}${year}/$[year}.vrt \
 #   --crown_path=$crown_path \
 #   --save_path=$save_path \
 #   --year=$year \
@@ -87,7 +87,7 @@ def parse_arguments():
     return(args)
 
 
-def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
+def make_model_inputs(crowns, xa, save_path, y, IDcolumn, label=None,):
     '''
     Returns DataFrame with features for use in classification model.
     The resulting DataFrame has 'ID' column which matches that in crowns.
@@ -273,8 +273,9 @@ def make_model_inputs(crowns, xa, save_path, y, gk, IDcolumn, label=None,):
             'r_mean', 'r_std', 'g_mean', 'g_std', 'b_mean', 'b_std', 'n_mean', 'n_std']
 
     data = pd.DataFrame(data, columns=cols)
-    data.to_parquet(save_path / f'features_{y}_{gk}.parquet')
-    print(y, gk, 'saved to ', str(save_path / f'features_{y}_{gk}.parquet'))
+    dst = save_path / f'features_{y}.parquet'
+    data.to_parquet(dst)
+    print(y, 'saved to ', str(dst))
     del data
 
 
@@ -303,7 +304,7 @@ if __name__ == '__main__':
     make_model_inputs(
         crowns,
         xa,
-        args.save_path, args.year, gk,
+        args.save_path, args.year,
         args.IDcolumn,
         label=args.label
         )
