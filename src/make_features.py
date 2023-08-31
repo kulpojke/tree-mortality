@@ -17,6 +17,7 @@ import joblib
 from joblib import Parallel, delayed, dump, load
 import contextlib
 import os
+from shutil import rmtree
 
 import geopandas as gpd
 import numpy as np
@@ -72,9 +73,9 @@ def parse_arguments():
         '--n_jobs',
         type=int,
         required=False,
-        default=-1,
+        default=-2,
         help='''Maximum number of concurrently running jobs.
-        Defaults to -1, which means all CPUs are used.'''
+        Defaults to -2, which means all but 1 CPUs are used.'''
     )
     
     parser.add_argument(
@@ -259,9 +260,9 @@ def make_model_inputs(crown_path, cols, tif_path, save_path, y, IDcolumn, n_jobs
             previous = j
             continue
         # TODO: REMOVE THIS TEMPORARY CHANGE
-        if j == 1:
-            previous = j
-            continue
+        #if j == 10_000:
+        #    previous = j
+        #    continue
         
         print(f'\t\t\t-- on {i} of {len(chunks)} --')
         # get the extent of the crowns
@@ -388,22 +389,54 @@ def make_model_inputs(crown_path, cols, tif_path, save_path, y, IDcolumn, n_jobs
             )
         
 
-        feat_cols = [IDcolumn, 'label',
-                'lum10', 'lum20', 'lum30', 'lum40', 'lum50', 'lum60' ,'lum70', 'lum80', 'lum90', 'lum100',
-                'rgi10', 'rgi20', 'rgi30', 'rgi40', 'rgi50', 'rgi60' ,'rgi70', 'rgi80', 'rgi90', 'rgi100',
-                'r10', 'r20', 'r30', 'r40', 'r50', 'r60' ,'r70', 'r80', 'r90', 'r100',
-                'g10', 'g20', 'g30', 'g40', 'g50', 'g60' ,'g70', 'g80', 'g90', 'g100',
-                'b10', 'b20', 'b30', 'b40', 'b50', 'b60' ,'b70', 'b80', 'b90', 'b100',
-                'n10', 'n20', 'n30', 'n40', 'n50', 'n60' ,'n70', 'n80', 'n90', 'n100',
-                'ndvi_mean', 'ndvi_std', 'rgi_mean', 'rgi_std', 'savi_mean', 'savi_std',
-                'r_mean', 'r_std', 'g_mean', 'g_std', 'b_mean', 'b_std', 'n_mean', 'n_std']
+        feat_cols = [
+            IDcolumn, 'label',
+            'lum10', 'lum20', 'lum30', 'lum40', 'lum50',
+            'lum60' ,'lum70', 'lum80', 'lum90', 'lum100',
+            'rgi10', 'rgi20', 'rgi30', 'rgi40', 'rgi50',
+            'rgi60' ,'rgi70', 'rgi80', 'rgi90', 'rgi100',
+            'r10', 'r20', 'r30', 'r40', 'r50',
+            'r60' ,'r70', 'r80', 'r90', 'r100',
+            'g10', 'g20', 'g30', 'g40', 'g50',
+            'g60' ,'g70', 'g80', 'g90', 'g100',
+            'b10', 'b20', 'b30', 'b40', 'b50',
+            'b60' ,'b70', 'b80', 'b90', 'b100',
+            'n10', 'n20', 'n30', 'n40', 'n50',
+            'n60' ,'n70', 'n80', 'n90', 'n100',
+            'ndvi_mean', 'ndvi_std',
+            'rgi_mean', 'rgi_std',
+            'savi_mean', 'savi_std',
+            'r_mean', 'r_std',
+            'g_mean', 'g_std',
+            'b_mean', 'b_std',
+            'n_mean', 'n_std'
+        ]
 
         data = pd.DataFrame(data, columns=feat_cols)
         dst = save_path / f'features_{y}_{i}.parquet'
         data.to_parquet(dst)
         print(y, 'saved to ', str(dst))
-        del data
-
+        
+        # cleanup
+        try:
+            del data
+            [
+                rmtree(memmap)
+                for memmap 
+                in [
+                    memmap_path0,
+                    memmap_path1,
+                    memmap_path2,
+                    memmap_path3,
+                    memmap_path4,
+                    memmap_path5,
+                    memmap_path6
+                    ]
+            ]
+        except:
+            # no reason to get in a tizzy if this fails
+            pass
+        
 
 if __name__ == '__main__':
     # parse args
