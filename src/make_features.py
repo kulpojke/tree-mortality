@@ -1,7 +1,7 @@
 #tif_path=data/helena/NAIP/
 #crown_path=data/helena/spectral_crowns/crowns.parquet
 #save_path=data/helena/features/
-#IDcolum=UniqueID
+#IDcolumn=UniqueID
 #for year in 2018  2020  2022
 #do
 #python3 src/make_features.py --tif_path=${tif_path}${year}/${year}.vrt --crown_path=$crown_path --save_path=$save_path --year=$year --IDcolum=$IDcolum
@@ -91,6 +91,14 @@ def parse_arguments():
         required=False,
         help='''Optional - column names to read, defaults to ['UniqueID', 'treatment', 'geometry']''',
         default=['UniqueID', 'treatment', 'geometry']
+    )
+    
+    parser.add_argument(
+        '--chunk_size',
+        type=int,
+        required=False,
+        help='Optional - number of crowns to process per chunk, default=4096',
+        default=4096
     )
 
     # parse the args
@@ -234,7 +242,17 @@ def inner_func(row, xa, masked_rgi, masked_ndvi, r_,
     
 
 
-def make_model_inputs(crown_path, cols, tif_path, save_path, y, IDcolumn, n_jobs, label=None,):
+def make_model_inputs(
+    crown_path,
+    cols,
+    tif_path,
+    save_path,
+    y,
+    IDcolumn,
+    n_jobs,
+    chunk_size,
+    label=None
+    ):
     '''
     Returns DataFrame with features for use in classification model.
     The resulting DataFrame has 'ID' column which matches that in crowns.
@@ -251,18 +269,14 @@ def make_model_inputs(crown_path, cols, tif_path, save_path, y, IDcolumn, n_jobs
     '''
     # process in chunks (unfortunately no chunksize arg in read_parquet)
     n = len(gpd.read_parquet(crown_path)[args.cols])
-    chunks = list(np.arange(10_000, n, 10_000))
+    chunks = list(np.arange(chunk_size, n, chunk_size))
     if chunks[-1] != n:
         chunks = chunks + [n]
 
-    for i, j in enumerate(np.arange(0, n, 10_000)):
+    for i, j in enumerate(np.arange(0, n, chunk_size)):
         if j == 0:
             previous = j
             continue
-        # TODO: REMOVE THIS TEMPORARY CHANGE
-        #if j == 10_000:
-        #    previous = j
-        #    continue
         
         print(f'\t\t\t-- on {i} of {len(chunks)} --')
         # get the extent of the crowns
@@ -454,6 +468,7 @@ if __name__ == '__main__':
         args.year,
         args.IDcolumn,
         args.n_jobs,
+        args.chunk_size,
         label=args.label
         )
 # %%
