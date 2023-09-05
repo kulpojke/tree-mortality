@@ -2,13 +2,11 @@
 #crown_path=data/helena/spectral_crowns/crowns.parquet
 #save_path=data/helena/features/
 #IDcolumn=UniqueID
+#n_jobs=10
 #for year in 2018  2020  2022
 #do
-#python3 src/make_features.py --tif_path=${tif_path}${year}/${year}.vrt --crown_path=$crown_path --save_path=$save_path --year=$year --IDcolum=$IDcolum
+#python3 src/make_features.py --tif_path=${tif_path}${year}/${year}.vrt --crown_path=$crown_path --save_path=$save_path --year=$year --IDcolum=$IDcolumn --n_jobs=$n_jobs --chunk_size=2048
 #done
-
-
-
 
 
 from pathlib import Path
@@ -383,7 +381,7 @@ def make_model_inputs(
         
         # attach values to crowns
         bins = np.arange(0.1, 1.1, 0.1)
-        with tqdm_joblib(tqdm(desc="My calculation", total=len(crowns))) as progress_bar:
+        with tqdm_joblib(tqdm(desc='Calculating features', total=len(crowns))) as progress_bar:
             data = Parallel(n_jobs=n_jobs)(
                 delayed(inner_func)
                 (
