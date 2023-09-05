@@ -451,6 +451,8 @@ def make_model_inputs(
             # no reason to get in a tizzy if this fails
             pass
         
+        previous = j
+        
 
 if __name__ == '__main__':
     # parse args
