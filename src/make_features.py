@@ -237,8 +237,6 @@ def inner_func(row, xa, masked_rgi, masked_ndvi, r_,
         [r_mean, r_std, g_mean, g_std, b_mean, b_std, n_mean, n_std]
         )
     
-    
-
 
 def make_model_inputs(
     crown_path,
@@ -345,12 +343,14 @@ def make_model_inputs(
         # make disk storage
         mem_dir = Path.cwd() / 'joblib_memmap'
             
+        # make sure dir is not there to avoid
+        # OSError: [Errno 24] Too many open files
         try:
             os.mkdir(mem_dir)
         except FileExistsError:
-            pass
+            rmtree(mem_dir)
+            os.mkdir(mem_dir)
         
-      
         memmap_path0 = mem_dir / 'data_memmap0'
         dump(xa, memmap_path0)
         xa = load(memmap_path0, mmap_mode='r')
@@ -432,19 +432,7 @@ def make_model_inputs(
         # cleanup
         try:
             del data
-            [
-                rmtree(memmap)
-                for memmap 
-                in [
-                    memmap_path0,
-                    memmap_path1,
-                    memmap_path2,
-                    memmap_path3,
-                    memmap_path4,
-                    memmap_path5,
-                    memmap_path6
-                    ]
-            ]
+            rmtree(mem_dir)
         except:
             # no reason to get in a tizzy if this fails
             pass
