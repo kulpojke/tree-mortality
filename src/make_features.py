@@ -98,6 +98,7 @@ def parse_arguments():
         help='Optional - number of crowns to process per chunk, default=4096',
         default=4096
     )
+    
 
     # parse the args
     args = parser.parse_args()
@@ -274,6 +275,13 @@ def make_model_inputs(
             previous = j
             continue
         
+        # make path to output file
+        dst = save_path / f'features_{y}_{i}.parquet'
+
+        # if the output file already exists, skip chunk
+        if dst.is_file():
+            continue
+        
         print(f'\t\t\t-- on {i} of {len(chunks)} --')
         # get the extent of the crowns
         xmin, ymin, xmax, ymax = gpd.read_parquet(crown_path).iloc[previous:j, :][cols].total_bounds
@@ -425,7 +433,6 @@ def make_model_inputs(
         ]
 
         data = pd.DataFrame(data, columns=feat_cols)
-        dst = save_path / f'features_{y}_{i}.parquet'
         data.to_parquet(dst)
         print(y, 'saved to ', str(dst))
         
