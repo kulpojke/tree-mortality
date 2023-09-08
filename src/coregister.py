@@ -1,3 +1,5 @@
+# this is for coregistering planet data to lidar
+
 #%%
 import cv2
 import numpy as np

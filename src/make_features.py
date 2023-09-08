@@ -280,6 +280,7 @@ def make_model_inputs(
 
         # if the output file already exists, skip chunk
         if dst.is_file():
+            previous = j
             continue
         
         print(f'\t\t\t-- on {i} of {len(chunks)} --')
@@ -359,54 +360,145 @@ def make_model_inputs(
             rmtree(mem_dir)
             os.mkdir(mem_dir)
         
-        memmap_path0 = mem_dir / 'data_memmap0'
-        dump(xa, memmap_path0)
-        xa = load(memmap_path0, mmap_mode='r')
-        
-        memmap_path1 = mem_dir / 'data_memmap1'
-        dump(masked_rgi, memmap_path1)
-        masked_rgi = load(memmap_path1, mmap_mode='r')
-        
-        memmap_path2 = mem_dir / 'data_memmap2'
-        dump(masked_ndvi, memmap_path2)
-        masked_ndvi = load(memmap_path2, mmap_mode='r')
-        
-        memmap_path3 = mem_dir / 'data_memmap3'
-        dump(r_, memmap_path3)
-        r_ = load(memmap_path3, mmap_mode='r')
-        
-        memmap_path4 = mem_dir / 'data_memmap4'
-        dump(g_, memmap_path4)
-        g_ = load(memmap_path4, mmap_mode='r')
-        
-        memmap_path5 = mem_dir / 'data_memmap5'
-        dump(b_, memmap_path5)
-        b_ = load(memmap_path5, mmap_mode='r')
-        
-        memmap_path6 = mem_dir / 'data_memmap6'
-        dump(n_, memmap_path6)
-        n_ = load(memmap_path6, mmap_mode='r')
-        
-        # attach values to crowns
-        bins = np.arange(0.1, 1.1, 0.1)
-        with tqdm_joblib(tqdm(desc='Calculating features', total=len(crowns))) as progress_bar:
-            data = Parallel(n_jobs=n_jobs)(
-                delayed(inner_func)
-                (
-                    row,
-                    xa,
-                    masked_rgi,
-                    masked_ndvi,
-                    r_,
-                    g_,
-                    b_,
-                    n_,
-                    IDcolumn,
-                    label,
-                    bins
+        try:
+            memmap_path0 = mem_dir / 'data_memmap0'
+            dump(xa, memmap_path0)
+            xa = load(memmap_path0, mmap_mode='r')
+            
+            memmap_path1 = mem_dir / 'data_memmap1'
+            dump(masked_rgi, memmap_path1)
+            masked_rgi = load(memmap_path1, mmap_mode='r')
+            
+            memmap_path2 = mem_dir / 'data_memmap2'
+            dump(masked_ndvi, memmap_path2)
+            masked_ndvi = load(memmap_path2, mmap_mode='r')
+            
+            memmap_path3 = mem_dir / 'data_memmap3'
+            dump(r_, memmap_path3)
+            r_ = load(memmap_path3, mmap_mode='r')
+            
+            memmap_path4 = mem_dir / 'data_memmap4'
+            dump(g_, memmap_path4)
+            g_ = load(memmap_path4, mmap_mode='r')
+            
+            memmap_path5 = mem_dir / 'data_memmap5'
+            dump(b_, memmap_path5)
+            b_ = load(memmap_path5, mmap_mode='r')
+            
+            memmap_path6 = mem_dir / 'data_memmap6'
+            dump(n_, memmap_path6)
+            n_ = load(memmap_path6, mmap_mode='r')
+            
+            # attach values to crowns
+            bins = np.arange(0.1, 1.1, 0.1)
+            with tqdm_joblib(tqdm(desc='Calculating features', total=len(crowns))) as progress_bar:
+                data = Parallel(n_jobs=n_jobs)(
+                    delayed(inner_func)
+                    (
+                        row,
+                        xa,
+                        masked_rgi,
+                        masked_ndvi,
+                        r_,
+                        g_,
+                        b_,
+                        n_,
+                        IDcolumn,
+                        label,
+                        bins
+                    )
+                    for _, row in crowns.iterrows()
                 )
-                for _, row in crowns.iterrows()
-            )
+                
+        except:
+            print('Processing the chunk using memory mapping failed')
+            print('Trying without memory mapping...')
+        
+            # remove the memmap dir
+            rmtree(mem_dir)
+            
+            # clip the image
+            xa = rioxarray.open_rasterio(tif_path).astype(np.float32).rio.clip_box(
+                minx=xmin,
+                miny=ymin,
+                maxx=xmax,
+                maxy=ymax
+            ).to_dataset(name='band_data')
+
+            # normalized the band_data
+            print(f'\t\t--normalizing (step 1/7)...')
+            band_data = xa.band_data.to_numpy().astype(np.float16)
+            band_data = (band_data - np.nanmin(band_data)) * (255 / (np.nanmax(band_data) - np.nanmin(band_data)))
+
+            # calculate relative greenness
+            print(f'\t\t--calculating RGI (step 2/7)...')
+            red = band_data[0]
+            green = band_data[1]
+            blue = band_data[2]
+            nir = band_data[3]
+            rgi = green / (red + green + blue)
+            xa['rgi'] = (('y', 'x'), rgi)
+
+            # calculate pixel by pixel normalized R, G, B, and NIR
+            print(f'\t\t--pix norming (step 3/7)...')
+            rgbn_tot = red + green + blue + nir
+            xa['red_'] = (('y', 'x'), red  / rgbn_tot)
+            xa['blue_'] = (('y', 'x'), blue  / rgbn_tot)
+            xa['green_'] = (('y', 'x'), green  / rgbn_tot)
+            xa['nir_'] = (('y', 'x'), nir  / rgbn_tot)
+
+            # calculate NDVI and SAVI
+            print(f'\t\t--NDVI and SAVI (step 4/7)...')
+            nir_agg = xa.band_data[3].astype(float)
+            red_agg = xa.band_data[2].astype(float)
+            ndvi_agg = (nir_agg - red_agg) / (nir_agg + red_agg)
+            L = 1.0
+            savi_agg = (1 + L) * (nir_agg - red_agg) / (nir_agg + red_agg + L)
+            xa['NDVI'] = ndvi_agg
+            xa['SAVI'] = savi_agg
+            
+            del nir_agg, red_agg, ndvi_agg, savi_agg
+
+            # calculate RGB luminosity
+            print(f'\t\t--luminosity (step 5/7)...')
+            luminosity = band_data[:3].mean(axis=0) / 255
+            xa['luminosity'] = (('y', 'x'), luminosity)
+
+            # mask out shadows and soil for RGI,NDVI, and normed pix colors
+            print(f'\t\t--masking (step 6/7)...')
+            mask = (luminosity > 0.176) & (luminosity < 0.569) 
+            masked_rgi = xa.rgi.where(mask)
+            masked_ndvi = xa.NDVI.where(mask)
+            r_ = xa.red_.where(mask)
+            g_ = xa.green_.where(mask)
+            b_ = xa.blue_.where(mask)
+            n_ = xa.nir_.where(mask)
+            
+            print(f'\t\t--adding index data (step 7/7)...')
+            
+            # read crowns
+            crowns = gpd.read_parquet(crown_path).iloc[previous:j, :][cols]
+        
+            # attach values to crowns
+            bins = np.arange(0.1, 1.1, 0.1)
+            with tqdm_joblib(tqdm(desc='Calculating features', total=len(crowns))) as progress_bar:
+                data = Parallel(n_jobs=n_jobs)(
+                    delayed(inner_func)
+                    (
+                        row,
+                        xa,
+                        masked_rgi,
+                        masked_ndvi,
+                        r_,
+                        g_,
+                        b_,
+                        n_,
+                        IDcolumn,
+                        label,
+                        bins
+                    )
+                    for _, row in crowns.iterrows()
+                )
         
 
         feat_cols = [
